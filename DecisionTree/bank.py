@@ -99,8 +99,8 @@ columns = [
 ]
 
 # Load the train and test data (if hosted online, replace with the actual URL)
-bank_data = pd.read_csv('/content/drive/MyDrive/cs5350/bank/train.csv', names=columns)
-bank_test_data = pd.read_csv('/content/drive/MyDrive/cs5350/bank/test.csv', names=columns)
+bank_data = pd.read_csv('/bank/train.csv', names=columns)
+bank_test_data = pd.read_csv('/bank/test.csv', names=columns)
 
 # Binary conversion of numerical columns based on their median value
 binary_columns = ['age', 'balance', 'day', 'duration', 'pdays', 'previous', 'campaign']

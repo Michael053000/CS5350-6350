@@ -113,8 +113,8 @@ def calculate_accuracy(tree, data, labels):
     return (predictions == labels).mean()  # Return the accuracy (correct predictions / total)
 
 # Load and preprocess the dataset
-train_data = pd.read_csv('/content/drive/MyDrive/cs5350/car/train.csv', header=None, names=['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety', 'class'])
-test_data = pd.read_csv('/content/drive/MyDrive/cs5350/car/test.csv', header=None, names=['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety', 'class'])
+train_data = pd.read_csv('/car/train.csv', header=None, names=['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety', 'class'])
+test_data = pd.read_csv('/car/test.csv', header=None, names=['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety', 'class'])
 
 # Separate features (X) and labels (y) for both training and testing datasets
 X_train, y_train = train_data.drop(columns='class'), train_data['class']
