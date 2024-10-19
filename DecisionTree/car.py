@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 from collections import Counter
@@ -141,3 +140,109 @@ for criterion, func in criteria.items():
 # Convert results to a DataFrame and print them for analysis
 results_df = pd.DataFrame(results)
 print(results_df)
+
+
+# Step 1: Define a Decision Stump (a shallow decision tree with max depth = 1)
+class DecisionStump:
+    def __init__(self):
+        self.feature = None
+        self.threshold = None
+        self.polarity = 1  # Direction of inequality
+        self.alpha = None  # Weight of this stump in AdaBoost
+
+    def fit(self, X, y, weights):
+        n_samples, n_features = X.shape
+        best_gain = -float('inf')
+
+        # Try all features and thresholds
+        for feature_idx in range(n_features):
+            feature_values = X[:, feature_idx]
+            thresholds = np.unique(feature_values)
+
+            for threshold in thresholds:
+                gain, polarity = self._calculate_weighted_gain(feature_values, y, threshold, weights)
+                if gain > best_gain:
+                    best_gain = gain
+                    self.feature = feature_idx
+                    self.threshold = threshold
+                    self.polarity = polarity
+
+    def predict(self, X):
+        feature_values = X[:, self.feature]
+        predictions = np.ones(len(X))
+        if self.polarity == 1:
+            predictions[feature_values < self.threshold] = -1
+        else:
+            predictions[feature_values >= self.threshold] = -1
+        return predictions
+
+    def _calculate_weighted_gain(self, feature_values, y, threshold, weights):
+        left_mask = feature_values < threshold
+        right_mask = feature_values >= threshold
+        left_weight = np.sum(weights[left_mask])
+        right_weight = np.sum(weights[right_mask])
+
+        left_majority = np.sign(np.dot(weights[left_mask], y[left_mask]))
+        right_majority = np.sign(np.dot(weights[right_mask], y[right_mask]))
+
+        left_error = np.sum(weights[left_mask] * (y[left_mask] != left_majority))
+        right_error = np.sum(weights[right_mask] * (y[right_mask] != right_majority))
+
+        weighted_error = left_error + right_error
+        return 1 - weighted_error, 1 if left_majority == 1 else -1
+
+
+# Step 2: Implement AdaBoost
+class AdaBoost:
+    def __init__(self, n_estimators=500):
+        self.n_estimators = n_estimators
+        self.stumps = []
+        self.alphas = []
+
+    def fit(self, X, y):
+        n_samples, n_features = X.shape
+        weights = np.ones(n_samples) / n_samples
+
+        for _ in range(self.n_estimators):
+            stump = DecisionStump()
+            stump.fit(X, y, weights)
+
+            predictions = stump.predict(X)
+
+            error = np.dot(weights, predictions != y) / np.sum(weights)
+            alpha = 0.5 * np.log((1 - error) / (error + 1e-10))
+
+            weights *= np.exp(-alpha * y * predictions)
+            weights /= np.sum(weights)
+
+            self.stumps.append(stump)
+            self.alphas.append(alpha)
+
+    def predict(self, X):
+        stump_predictions = [stump.predict(X) for stump in self.stumps]
+        final_predictions = np.sum([alpha * pred for alpha, pred in zip(self.alphas, stump_predictions)], axis=0)
+        return np.sign(final_predictions)
+
+
+# Load your car dataset and apply AdaBoost
+car_train_data = pd.read_csv('/car/train.csv', header=None, names=['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety', 'class'])
+car_test_data = pd.read_csv('/car/test.csv', header=None, names=['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety', 'class'])
+
+X_train = car_train_data.drop(columns='class').values
+y_train = car_train_data['class'].replace({'unacc': -1, 'acc': 1}).values
+X_test = car_test_data.drop(columns='class').values
+y_test = car_test_data['class'].replace({'unacc': -1, 'acc': 1}).values
+
+# Train AdaBoost
+adaboost = AdaBoost(n_estimators=500)
+adaboost.fit(X_train, y_train)
+
+# Predict using AdaBoost
+train_predictions = adaboost.predict(X_train)
+test_predictions = adaboost.predict(X_test)
+
+train_accuracy = np.mean(train_predictions == y_train)
+test_accuracy = np.mean(test_predictions == y_test)
+
+print(f'Training Accuracy: {train_accuracy:.4f}')
+print(f'Test Accuracy: {test_accuracy:.4f}')

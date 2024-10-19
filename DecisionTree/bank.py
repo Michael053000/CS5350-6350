@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 from collections import defaultdict, Counter
@@ -145,3 +144,129 @@ print(error_table.to_string(float_format="{:.4f}".format))
 avg_errors = evaluation_df.groupby('Impurity')[['Train Error', 'Test Error']].mean()
 print("\nAverage Errors Across All Depths:")
 print(avg_errors.to_string(float_format="{:.4f}".format))
+
+
+#HW2
+
+# A class to represent a decision stump (a tree with depth 1)
+class DecisionStump:
+    def __init__(self):
+        self.feature = None  # Feature to be split
+        self.threshold = None  # Threshold for binary splits
+        self.polarity = 1  # Used for direction of the inequality
+        self.alpha = None  # Weight of this stump in AdaBoost
+
+    def fit(self, X, y, weights):
+        n_samples, n_features = X.shape
+        best_gain = -float('inf')
+
+        # Loop over all features
+        for feature_idx in range(n_features):
+            feature_values = X[:, feature_idx]
+            thresholds = np.unique(feature_values)
+
+            # Try each threshold value as a split point
+            for threshold in thresholds:
+                gain, polarity = self._calculate_weighted_gain(feature_values, y, threshold, weights)
+                if gain > best_gain:
+                    best_gain = gain
+                    self.feature = feature_idx
+                    self.threshold = threshold
+                    self.polarity = polarity
+
+    def predict(self, X):
+        feature_values = X[:, self.feature]
+        predictions = np.ones(len(X))
+        if self.polarity == 1:
+            predictions[feature_values < self.threshold] = -1
+        else:
+            predictions[feature_values >= self.threshold] = -1
+        return predictions
+
+    def _calculate_weighted_gain(self, feature_values, y, threshold, weights):
+        left_mask = feature_values < threshold
+        right_mask = feature_values >= threshold
+        left_weight = np.sum(weights[left_mask])
+        right_weight = np.sum(weights[right_mask])
+
+        # Weighted majority class for left and right splits
+        left_majority = np.sign(np.dot(weights[left_mask], y[left_mask]))
+        right_majority = np.sign(np.dot(weights[right_mask], y[right_mask]))
+
+        # Weighted error calculation
+        left_error = np.sum(weights[left_mask] * (y[left_mask] != left_majority))
+        right_error = np.sum(weights[right_mask] * (y[right_mask] != right_majority))
+
+        # Total weighted error and return the gain
+        weighted_error = left_error + right_error
+        return 1 - weighted_error, 1 if left_majority == 1 else -1
+
+
+# Implementing AdaBoost
+class AdaBoost:
+    def __init__(self, n_estimators=500):
+        self.n_estimators = n_estimators
+        self.stumps = []
+        self.alphas = []
+
+    def fit(self, X, y):
+        n_samples, n_features = X.shape
+        weights = np.ones(n_samples) / n_samples
+
+        for _ in range(self.n_estimators):
+            stump = DecisionStump()
+            stump.fit(X, y, weights)
+
+            predictions = stump.predict(X)
+
+            error = np.dot(weights, predictions != y) / np.sum(weights)
+            alpha = 0.5 * np.log((1 - error) / (error + 1e-10))
+
+            # Update weights
+            weights *= np.exp(-alpha * y * predictions)
+            weights /= np.sum(weights)
+
+            self.stumps.append(stump)
+            self.alphas.append(alpha)
+
+    def predict(self, X):
+        stump_predictions = [stump.predict(X) for stump in self.stumps]
+        final_predictions = np.sum([alpha * pred for alpha, pred in zip(self.alphas, stump_predictions)], axis=0)
+        return np.sign(final_predictions)
+
+
+# Load the train and test data
+columns = [
+    'age', 'job', 'marital', 'education', 'default', 'balance', 'housing',
+    'loan', 'contact', 'day', 'month', 'duration', 'campaign', 'pdays',
+    'previous', 'poutcome', 'y'
+]
+
+bank_data = pd.read_csv('/bank/train.csv', names=columns)
+bank_test_data = pd.read_csv('/bank/test.csv', names=columns)
+
+# Binary conversion of numerical columns based on their median value
+binary_columns = ['age', 'balance', 'day', 'duration', 'pdays', 'previous', 'campaign']
+for column_name in binary_columns:
+    bank_data[column_name] = bank_data[column_name] > bank_data[column_name].median()
+    bank_test_data[column_name] = bank_test_data[column_name] > bank_data[column_name].median()  # Use train data's median
+
+# Prepare the training and test data for the decision tree algorithm
+X_train = bank_data.drop('y', axis=1).values
+y_train = bank_data['y'].replace({'yes': 1, 'no': -1}).values  # Replace 'yes'/'no' with 1/-1
+X_test = bank_test_data.drop('y', axis=1).values
+y_test = bank_test_data['y'].replace({'yes': 1, 'no': -1}).values
+
+# Train AdaBoost with Decision Stumps
+adaboost = AdaBoost(n_estimators=500)
+adaboost.fit(X_train, y_train)
+
+# Predict on test set
+train_predictions = adaboost.predict(X_train)
+test_predictions = adaboost.predict(X_test)
+
+train_accuracy = np.mean(train_predictions == y_train)
+test_accuracy = np.mean(test_predictions == y_test)
+
+print(f'Training Accuracy: {train_accuracy:.4f}')
+print(f'Test Accuracy: {test_accuracy:.4f}')
