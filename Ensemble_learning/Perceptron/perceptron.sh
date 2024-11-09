@@ -1,2 +1,2 @@
 #!/bin/bash
-python3 Perceptron.py
+python3 perceptron.py
