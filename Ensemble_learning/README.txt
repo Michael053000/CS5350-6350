@@ -4,3 +4,7 @@
 ├── Perceptron/
 │   ├── Perceptron.py
 │   ├── Perceptron.sh
+├── SVM/
+│   ├── numb2.py
+│   ├── numb3.py
+│   ├── svm.sh
