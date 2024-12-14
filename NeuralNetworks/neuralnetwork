@@ -1,0 +1,128 @@
+import numpy as np
+import copy
+
+# Set a fixed random seed for reproducibility
+np.random.seed(1)
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+# Predicts the network output for a given input `x`, weights `W`, and output weights `v`.
+# `hiddenUnits` specifies the width of the hidden layer.
+def networkPredict(W, v, x, hiddenUnits):
+    h = np.zeros(hiddenUnits)  # Initialize the activations for the hidden layer
+    for i in range(hiddenUnits):
+        # Compute activation for each hidden unit using tanh
+        h[i] = np.tanh(np.dot(W[:, i], x[:-1]))  # Dot product of weights and inputs
+    return np.dot(v, h)  # Compute the final output by combining hidden activations with output weights
+
+# Trains the neural network using stochastic gradient descent
+# Part a and b of the problem are addressed here
+# D: Dataset, learningRate: initial learning rate, K: width (number of hidden units), MaxIter: maximum number of iterations
+def networkTrain(D, learningRate, K, MaxIter):
+    # Initialize weights for input-to-hidden connections (W) and hidden-to-output connections (v)
+    np.random.seed(1)
+    W = np.random.randn(D.shape[1] - 1, K)  # Random initialization for W
+    v = np.random.randn(K)  # Random initialization for v
+    # Alternatively, initialize weights to zero
+    W = np.zeros((D.shape[1] - 1, K))
+    v = np.zeros(K)
+    
+    for i in range(MaxIter):  # Iterate for a maximum of MaxIter steps
+        oldW = copy.deepcopy(W)  # Keep a copy of old weights for convergence checking
+        G = np.zeros((D.shape[1] - 1, K))  # Gradient matrix for W
+        g = np.zeros(K)  # Gradient vector for v
+        
+        for d in D:  # Loop over each data point in the dataset
+            h = np.zeros(K)  # Hidden layer activations
+            a = np.zeros(K)  # Pre-activation values for hidden units
+            for j in range(K):
+                # Compute the pre-activation and activation for each hidden unit
+                a[j] = np.dot(W[:, j], d[:-1])
+                h[j] = np.tanh(a[j])
+            
+            # Compute the network's output using the hidden layer activations
+            output = np.dot(v, h)
+            
+            # Compute the error between the predicted output and the true label
+            error = d[-1] - output
+            
+            # Update the gradients for the output weights (v)
+            g = g - error * h
+            
+            # Update the gradients for the input-to-hidden weights (W)
+            for j in range(K):
+                G[:, j] -= error * v[j] * (1 - np.tanh(a[j])**2) * d[:-1]
+        
+        # Update the weights using the computed gradients and the learning rate
+        W = W - learningRate * G
+        v = v - learningRate * g
+        
+        # Check for convergence (stop if weights change very little)
+        if np.linalg.norm(W - oldW) <= 10**-6:
+            break
+    
+    # Adjust the learning rate for the next iteration
+    learningRate = updateLearningRate(learningRate, i)
+    return [W, v]
+
+# Update the learning rate using a decay schedule
+def updateLearningRate(learningRate, i):
+    return learningRate / (1 + learningRate * i)
+
+# Reads data from a CSV file and returns it as a numpy array
+def readData(file_path):
+    data = np.genfromtxt(file_path, delimiter=',')
+    return data
+
+# Converts a continuous network output into a binary label (0 or 1)
+def toLabel(val):
+    val = sigmoid(val)
+    if val >= 0.5:
+        return 1
+    else:
+        return 0
+
+# Main function to test the neural network on training and test data
+def nnTest():
+    # Load the training and test datasets
+    trainingData = readData('classification/train.csv')
+    testData = readData('classification/test.csv')
+    
+    # Specify different widths (number of hidden units) to test
+    widths = [5, 10, 25, 50, 100]
+    
+    # Train and evaluate the network for each width
+    for w in widths:
+        result = networkTrain(trainingData, 0.01, w, 10000)  # Train the network
+        W = result[0]  # Input-to-hidden weights
+        v = result[1]  # Hidden-to-output weights
+        
+        # Evaluate on the test data
+        right = 0
+        naiveGuessing = 0
+        for d in testData:
+            val = toLabel(networkPredict(W, v, d, w))
+            if val == d[-1]:  # Check if the prediction matches the true label
+                right += 1
+            if d[-1] == 0:  # Count examples with label 0 (for naive guessing accuracy)
+                naiveGuessing += 1
+        print(f"Accuracy for width of test data {w} is {(right / len(testData) * 100):.2f}%")
+        
+        # Evaluate on the training data
+        right = 0
+        naiveGuessingTraining = 0
+        for d in trainingData:
+            val = toLabel(networkPredict(W, v, d, w))
+            if val == d[-1]:
+                right += 1
+            if d[-1] == 0:
+                naiveGuessingTraining += 1
+        print(f"Accuracy for width training data of {w} is {(right / len(trainingData) * 100):.2f}%")
+    
+    # Report naive guessing accuracy
+    print(f"Accuracy for naive guessing on test data is {(naiveGuessing / len(testData) * 100):.2f}%")
+    print(f"Accuracy for naive guessing on training data is {(naiveGuessingTraining / len(trainingData) * 100):.2f}%")
+
+# Run the test function
+nnTest()
