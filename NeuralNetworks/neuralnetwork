@@ -1,128 +1,247 @@
 import numpy as np
-import copy
+import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+import matplotlib.pyplot as plt
 
-# Set a fixed random seed for reproducibility
-np.random.seed(1)
+# Shared Data Loading and Preprocessing
+train_data = pd.read_csv("train.csv", header=None)
+test_data = pd.read_csv("test.csv", header=None)
 
-def sigmoid(z):
-    return 1 / (1 + np.exp(-z))
+X = train_data.iloc[:, :-1].values
+y = train_data.iloc[:, -1].values
 
-# Predicts the network output for a given input `x`, weights `W`, and output weights `v`.
-# `hiddenUnits` specifies the width of the hidden layer.
-def networkPredict(W, v, x, hiddenUnits):
-    h = np.zeros(hiddenUnits)  # Initialize the activations for the hidden layer
-    for i in range(hiddenUnits):
-        # Compute activation for each hidden unit using tanh
-        h[i] = np.tanh(np.dot(W[:, i], x[:-1]))  # Dot product of weights and inputs
-    return np.dot(v, h)  # Compute the final output by combining hidden activations with output weights
+scaler = StandardScaler()
+X = scaler.fit_transform(X)
 
-# Trains the neural network using stochastic gradient descent
-# Part a and b of the problem are addressed here
-# D: Dataset, learningRate: initial learning rate, K: width (number of hidden units), MaxIter: maximum number of iterations
-def networkTrain(D, learningRate, K, MaxIter):
-    # Initialize weights for input-to-hidden connections (W) and hidden-to-output connections (v)
-    np.random.seed(1)
-    W = np.random.randn(D.shape[1] - 1, K)  # Random initialization for W
-    v = np.random.randn(K)  # Random initialization for v
-    # Alternatively, initialize weights to zero
-    W = np.zeros((D.shape[1] - 1, K))
-    v = np.zeros(K)
-    
-    for i in range(MaxIter):  # Iterate for a maximum of MaxIter steps
-        oldW = copy.deepcopy(W)  # Keep a copy of old weights for convergence checking
-        G = np.zeros((D.shape[1] - 1, K))  # Gradient matrix for W
-        g = np.zeros(K)  # Gradient vector for v
-        
-        for d in D:  # Loop over each data point in the dataset
-            h = np.zeros(K)  # Hidden layer activations
-            a = np.zeros(K)  # Pre-activation values for hidden units
-            for j in range(K):
-                # Compute the pre-activation and activation for each hidden unit
-                a[j] = np.dot(W[:, j], d[:-1])
-                h[j] = np.tanh(a[j])
-            
-            # Compute the network's output using the hidden layer activations
-            output = np.dot(v, h)
-            
-            # Compute the error between the predicted output and the true label
-            error = d[-1] - output
-            
-            # Update the gradients for the output weights (v)
-            g = g - error * h
-            
-            # Update the gradients for the input-to-hidden weights (W)
-            for j in range(K):
-                G[:, j] -= error * v[j] * (1 - np.tanh(a[j])**2) * d[:-1]
-        
-        # Update the weights using the computed gradients and the learning rate
-        W = W - learningRate * G
-        v = v - learningRate * g
-        
-        # Check for convergence (stop if weights change very little)
-        if np.linalg.norm(W - oldW) <= 10**-6:
-            break
-    
-    # Adjust the learning rate for the next iteration
-    learningRate = updateLearningRate(learningRate, i)
-    return [W, v]
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Update the learning rate using a decay schedule
-def updateLearningRate(learningRate, i):
-    return learningRate / (1 + learningRate * i)
+epochs = 100
+gamma_0 = 0.5
+d = 0.001
+widths = [5, 10, 25, 50, 100]
 
-# Reads data from a CSV file and returns it as a numpy array
-def readData(file_path):
-    data = np.genfromtxt(file_path, delimiter=',')
-    return data
+# --- S gradient ---
+def gradient_descent(X_train, y_train, hidden_size, gamma_0, d, epochs):
+    np.random.seed(42)
+    input_size = X_train.shape[1]
+    output_size = 1
 
-# Converts a continuous network output into a binary label (0 or 1)
-def toLabel(val):
-    val = sigmoid(val)
-    if val >= 0.5:
-        return 1
-    else:
-        return 0
+    weights = {
+        'hidden': np.random.randn(input_size, hidden_size),
+        'output': np.random.randn(hidden_size, output_size)
+    }
 
-# Main function to test the neural network on training and test data
-def nnTest():
-    # Load the training and test datasets
-    trainingData = readData('classification/train.csv')
-    testData = readData('classification/test.csv')
-    
-    # Specify different widths (number of hidden units) to test
-    widths = [5, 10, 25, 50, 100]
-    
-    # Train and evaluate the network for each width
-    for w in widths:
-        result = networkTrain(trainingData, 0.01, w, 10000)  # Train the network
-        W = result[0]  # Input-to-hidden weights
-        v = result[1]  # Hidden-to-output weights
-        
-        # Evaluate on the test data
-        right = 0
-        naiveGuessing = 0
-        for d in testData:
-            val = toLabel(networkPredict(W, v, d, w))
-            if val == d[-1]:  # Check if the prediction matches the true label
-                right += 1
-            if d[-1] == 0:  # Count examples with label 0 (for naive guessing accuracy)
-                naiveGuessing += 1
-        print(f"Accuracy for width of test data {w} is {(right / len(testData) * 100):.2f}%")
-        
-        # Evaluate on the training data
-        right = 0
-        naiveGuessingTraining = 0
-        for d in trainingData:
-            val = toLabel(networkPredict(W, v, d, w))
-            if val == d[-1]:
-                right += 1
-            if d[-1] == 0:
-                naiveGuessingTraining += 1
-        print(f"Accuracy for width training data of {w} is {(right / len(trainingData) * 100):.2f}%")
-    
-    # Report naive guessing accuracy
-    print(f"Accuracy for naive guessing on test data is {(naiveGuessing / len(testData) * 100):.2f}%")
-    print(f"Accuracy for naive guessing on training data is {(naiveGuessingTraining / len(trainingData) * 100):.2f}%")
+    losses = []
+    for epoch in range(epochs):
+        total_loss = 0
+        for i in range(len(X_train)):
+            X = X_train[i]
+            y = y_train[i]
 
-# Run the test function
-nnTest()
+            gamma_t = gamma_0 / (1 + (gamma_0 / d) * (epoch * len(X_train) + i))
+
+            hidden_output = 1 / (1 + np.exp(-np.dot(X, weights['hidden'])))
+            output = 1 / (1 + np.exp(-np.dot(hidden_output, weights['output'])))
+
+            error = y - output
+            total_loss += error**2
+
+            output_delta = error * output * (1 - output)
+            hidden_delta = hidden_output * (1 - hidden_output) * np.dot(weights['output'], output_delta)
+
+            weights['output'] += gamma_t * np.outer(hidden_output, output_delta)
+            weights['hidden'] += gamma_t * np.outer(X, hidden_delta)
+
+        losses.append(total_loss / len(X_train))
+
+    return weights, losses
+
+sgradient_results = []
+for hidden_size in widths:
+    weights, losses = gradient_descent(X_train, y_train, hidden_size, gamma_0, d, epochs)
+    sgradient_results.append({'hidden_size': hidden_size, 'weights': weights, 'losses': losses})
+
+# --- Plot Sgradient Loss ---
+for result in sgradient_results:
+    plt.plot(result['losses'], label=f"Hidden {result['hidden_size']}")
+plt.title("Sgradient Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+# --- S gradient Zero.py ---
+def gradient_zero_initialization(X_train, y_train, hidden_size, gamma_0, d, epochs):
+    input_size = X_train.shape[1]
+    output_size = 1
+
+    weights = {
+        'hidden': np.zeros((input_size, hidden_size)),
+        'output': np.zeros((hidden_size, output_size))
+    }
+
+    losses = []
+    for epoch in range(epochs):
+        total_loss = 0
+        for i in range(len(X_train)):
+            X = X_train[i]
+            y = y_train[i]
+
+            gamma_t = gamma_0 / (1 + (gamma_0 / d) * (epoch * len(X_train) + i))
+
+            hidden_output = 1 / (1 + np.exp(-np.dot(X, weights['hidden'])))
+            output = 1 / (1 + np.exp(-np.dot(hidden_output, weights['output'])))
+
+            error = y - output
+            total_loss += error**2
+
+            output_delta = error * output * (1 - output)
+            hidden_delta = hidden_output * (1 - hidden_output) * np.dot(weights['output'], output_delta)
+
+            weights['output'] += gamma_t * np.outer(hidden_output, output_delta)
+            weights['hidden'] += gamma_t * np.outer(X, hidden_delta)
+
+        losses.append(total_loss / len(X_train))
+
+    return weights, losses
+
+gradient_zero_results = []
+for hidden_size in widths:
+    weights, losses = gradient_zero_initialization(X_train, y_train, hidden_size, gamma_0, d, epochs)
+    gradient_zero_results.append({'hidden_size': hidden_size, 'weights': weights, 'losses': losses})
+
+# --- Plot SgradientZero Loss ---
+for result in gradient_zero_results:
+    plt.plot(result['losses'], label=f"Hidden {result['hidden_size']}")
+plt.title("SgradientZero Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+# --- back propagation ---
+def backpropagation(X_train, y_train, hidden_size, gamma_0, d, epochs):
+    input_size = X_train.shape[1]
+    output_size = 1
+    np.random.seed(42)
+
+    weights = {
+        'hidden': np.random.randn(input_size, hidden_size),
+        'output': np.random.randn(hidden_size, output_size)
+    }
+
+    losses = []
+    for epoch in range(epochs):
+        total_loss = 0
+        for i in range(len(X_train)):
+            X = X_train[i]
+            y = y_train[i]
+
+            gamma_t = gamma_0 / (1 + (gamma_0 / d) * (epoch * len(X_train) + i))
+
+            hidden_input = np.dot(X, weights['hidden'])
+            hidden_output = 1 / (1 + np.exp(-hidden_input))
+
+            output_input = np.dot(hidden_output, weights['output'])
+            output = 1 / (1 + np.exp(-output_input))
+
+            error = y - output
+            total_loss += error**2
+
+            output_delta = error * output * (1 - output)
+
+            hidden_error = np.dot(weights['output'], output_delta)
+            hidden_delta = hidden_error * hidden_output * (1 - hidden_output)
+
+            weights['output'] += gamma_t * np.outer(hidden_output, output_delta)
+            weights['hidden'] += gamma_t * np.outer(X, hidden_delta)
+
+        losses.append(total_loss / len(X_train))
+
+    return weights, losses
+
+backprop_results = []
+for hidden_size in widths:
+    weights, losses = backpropagation(X_train, y_train, hidden_size, gamma_0, d, epochs)
+    backprop_results.append({'hidden_size': hidden_size, 'weights': weights, 'losses': losses})
+
+# --- Plot Backpropagation Loss ---
+for result in backprop_results:
+    plt.plot(result['losses'], label=f"Hidden {result['hidden_size']}")
+plt.title("Backpropagation Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+# --- pytorch ---
+def pytorch_model(X_train, y_train, hidden_size, epochs):
+    class NeuralNet(nn.Module):
+        def __init__(self, input_size, hidden_size, output_size):
+            super(NeuralNet, self).__init__()
+            self.hidden = nn.Linear(input_size, hidden_size)
+            self.output = nn.Linear(hidden_size, output_size)
+
+        def forward(self, x):
+            x = torch.sigmoid(self.hidden(x))
+            x = torch.sigmoid(self.output(x))
+            return x
+
+    input_size = X_train.shape[1]
+    output_size = 1
+    model = NeuralNet(input_size, hidden_size, output_size)
+    optimizer = torch.optim.SGD(model.parameters(), lr=gamma_0)
+    criterion = nn.MSELoss()
+
+    X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
+    y_train_tensor = torch.tensor(y_train.reshape(-1, 1), dtype=torch.float32)
+
+    losses = []
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        outputs = model(X_train_tensor)
+        loss = criterion(outputs, y_train_tensor)
+        loss.backward()
+        optimizer.step()
+
+        losses.append(loss.item())
+
+    return model, losses
+
+pytorch_results = []
+for hidden_size in widths:
+    model, losses = pytorch_model(X_train, y_train, hidden_size, epochs)
+    pytorch_results.append({'hidden_size': hidden_size, 'model': model, 'losses': losses})
+
+# --- Plot PyTorch Loss ---
+for result in pytorch_results:
+    plt.plot(result['losses'], label=f"Hidden {result['hidden_size']}")
+plt.title("PyTorch Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+# Print Results
+print("\n--- S gradient Results ---")
+for result in sgradient_results:
+    print(f"Hidden Size: {result['hidden_size']}, Final Loss: {result['losses'][-1]}")
+
+print("\n--- S gradient Zero Results ---")
+for result in gradient_zero_results:
+    print(f"Hidden Size: {result['hidden_size']}, Final Loss: {result['losses'][-1]}")
+
+print("\n--- Back Propagation Results ---")
+for result in backprop_results:
+    print(f"Hidden Size: {result['hidden_size']}, Final Loss: {result['losses'][-1]}")
+
+print("\n--- PyTorch Results ---")
+for result in pytorch_results:
+    print(f"Hidden Size: {result['hidden_size']}, Final Loss: {result['losses'][-1]}")
