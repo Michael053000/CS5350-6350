@@ -3,7 +3,6 @@
 
 ### README for Logistic Regression (LR)
 
-markdown
 # Logistic Regression Implementation (LR)
 
 ## Description
