@@ -36,7 +36,7 @@ This script implements a three-layer artificial neural network for classificatio
 - Generates a convergence plot of the loss over epochs.
 
 ## How to Run
-1. Ensure the dataset is placed in the `classification/` directory with the following files:
+1. Ensure the dataset is placed in the directory with the following files:
    - `train.csv`
    - `test.csv`
 
